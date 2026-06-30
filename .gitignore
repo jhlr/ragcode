@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+*.sqlite
+.ollama-mcp-index.sqlite
+**/.ollama-mcp-index.sqlite
+.DS_Store
