@@ -864,11 +864,50 @@ def ollama_index_project(
                          model=model, rebuild=rebuild)
 
 
+def _glob_to_re(pat: str):
+    """Compile a glob to a regex, supporting recursive `**` (spans `/`), `*`
+    (within a path segment), and `?`. fnmatch lacks `**`, which the docs' own
+    examples ("frontend/src/**/*.tsx") rely on."""
+    import re
+    i, n, out = 0, len(pat), []
+    while i < n:
+        if pat[i:i + 3] == "**/":
+            out.append("(?:.*/)?"); i += 3
+        elif pat[i:i + 2] == "**":
+            out.append(".*"); i += 2
+        elif pat[i] == "*":
+            out.append("[^/]*"); i += 1
+        elif pat[i] == "?":
+            out.append("[^/]"); i += 1
+        else:
+            out.append(re.escape(pat[i])); i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+def _match_path_globs(path: str, globs) -> bool:
+    """True if `path` passes the glob filter. `globs` may be None (no filter), a
+    single glob string, or a list of globs/paths — i.e. restrict the search to
+    that set of files. Each pattern matches as a glob (with recursive `**`), an
+    exact path, or a directory prefix ("backend/src/pdi-me" matches all under it)."""
+    if not globs:
+        return True
+    pats = [globs] if isinstance(globs, str) else list(globs)
+    for pat in pats:
+        if not pat:
+            continue
+        if _glob_to_re(pat).match(path):
+            return True
+        p = pat.rstrip("/")
+        if path == p or path.startswith(p + "/"):
+            return True
+    return False
+
+
 def code_search(
     query: str,
     root: str = ".",
     k: int = 8,
-    path_glob: str | None = None,
+    path_glob: "str | list[str] | None" = None,
     snippet_lines: int = 8,
     model: str | None = None,
 ) -> str:
@@ -876,8 +915,9 @@ def code_search(
     `ollama_index_project`. Returns top-`k` chunks as `path:start-end`
     plus a short snippet each. Use BEFORE Read/Grep when looking for a
     concept ("where do we handle PDI recalculation?") instead of a literal
-    string. `path_glob` filters results (e.g. "frontend/src/**/*.tsx")."""
-    import fnmatch
+    string. `path_glob` restricts the search to a set of files: a single glob
+    (e.g. "frontend/src/**/*.tsx") or a list of globs/paths/dirs (e.g.
+    ["backend/src/auth/**", "backend/src/users/users.service.ts"])."""
     import math
     import sqlite3
 
@@ -901,7 +941,7 @@ def code_search(
     for path, start, end, text, blob in conn.execute(
         "SELECT path, start_line, end_line, text, embedding FROM chunks"
     ):
-        if path_glob and not fnmatch.fnmatch(path, path_glob):
+        if not _match_path_globs(path, path_glob):
             continue
         v = _unpack_vec(blob)
         dot = sum(a * b for a, b in zip(q_emb, v))
@@ -929,7 +969,7 @@ def ollama_code_search(
     query: str,
     root: str = ".",
     k: int = 8,
-    path_glob: str | None = None,
+    path_glob: "str | list[str] | None" = None,
     snippet_lines: int = 8,
     model: str | None = None,
     auto_index: bool = True,
@@ -937,7 +977,9 @@ def ollama_code_search(
     """Semantic search over the project's index (`.git/ragcode-index.sqlite`).
     Returns top-`k` chunks as `path:start-end` + snippet. Use BEFORE Read/Grep
     when looking for a concept ("where do we handle PDI recalculation?") instead
-    of a literal string. `path_glob` filters (e.g. "frontend/src/**/*.tsx").
+    of a literal string. `path_glob` restricts the search to a set of files:
+    a single glob (e.g. "frontend/src/**/*.tsx") or a list of globs/paths/dirs
+    (e.g. ["backend/src/auth/**", "backend/src/users/users.service.ts"]).
 
     Auto-reindexes (git-incremental, ~instant if nothing changed) before
     searching — same behavior as the `ragcode-find` CLI — so results reflect

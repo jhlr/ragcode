@@ -73,7 +73,15 @@ ragcode-index .
 # Search by concept; returns path:start-end + a snippet per hit
 ragcode-find "where do we recalculate the PDI?" -k 8
 ragcode-find "fallback de provedor de LLM" --glob 'backend/**/*.ts'
+
+# Restrict to a set of files/dirs (--glob is repeatable; `**` is recursive)
+ragcode-find "PDI evidence validation" \
+  --glob 'backend/src/pdi-feedback/**' --glob backend/src/pdi-me
 ```
+
+`path_glob` (MCP tool) / `--glob` (CLI) takes a single glob or a **set**:
+globs with recursive `**`, exact file paths, or a directory (matches everything
+under it).
 
 Design notes:
 

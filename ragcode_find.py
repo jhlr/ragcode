@@ -32,8 +32,10 @@ def main() -> int:
     ap.add_argument("--root", default=".", help="project root (default: cwd)")
     ap.add_argument("-k", "--count", type=int, default=10,
                     help="how many occurrences to return (default: 10)")
-    ap.add_argument("--glob", dest="path_glob",
-                    help="restrict to paths matching this glob (e.g. 'frontend/**/*.tsx')")
+    ap.add_argument("--glob", dest="path_glob", action="append",
+                    help="restrict the search to paths matching this glob/path/dir; "
+                         "repeatable to search a set (e.g. --glob 'backend/auth/**' "
+                         "--glob src/users/users.service.ts)")
     ap.add_argument("--snippet-lines", type=int, default=8, help="snippet length per hit")
     ap.add_argument("--model", help="override embedding model")
     ap.add_argument("--no-index", action="store_true",

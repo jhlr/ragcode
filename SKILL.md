@@ -49,10 +49,13 @@ Gatilhos concretos:
    ```
    ollama_code_search(query="onde recalculamos o PDI", k=8)
    ollama_code_search(query="config do PWA manifest", path_glob="frontend/**/*.tsx")
+   ollama_code_search(query="validacao de evidencia", path_glob=[
+       "backend/src/pdi-feedback/**", "backend/src/pdi-me"])  # conjunto de arquivos
    ```
 
    - Params: `query`, `root` (default cwd), `k` (default 8), `path_glob`
-     (filtra path), `snippet_lines`, `auto_index` (default True — deixe ligado).
+     (restringe a busca a um conjunto: glob com `**` recursivo, caminho exato,
+     ou pasta — string ou lista), `snippet_lines`, `auto_index` (default True).
    - Ordem de preferencia:
      1. **tool MCP `ollama_code_search`** — SEMPRE o default.
      2. **Bash `ragcode-find "<query>" [-k N] [--glob ...]`** — mesmo motor,
