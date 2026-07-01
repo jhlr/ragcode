@@ -12,7 +12,8 @@ pushes the agent into reading files one by one):
   - Bash grep/rg -> same: pass, with a reminder when no recent code_search.
     Bash find -> BLOCK. Bypass any Bash command with `# allow-grep: <reason>`
     (a bare `# allow-grep` with no reason is rejected).
-  - Glob -> non-blocking reminder.
+  - Glob (native find-by-name) -> BLOCK, same as Bash find; escape via Bash
+    `find ... # allow-grep: <reason>`.
 
 Recency is stamped per project by ragcode-mark-search.py (a PostToolUse hook on
 ollama_code_search). Fails open on any error so a bug never wedges the session.
@@ -147,9 +148,12 @@ def main() -> int:
         return 0
 
     if tool == "Glob":
-        remind(
-            f"Glob acha arquivo por NOME. Se procura ONDE algo acontece no "
-            f"codigo (conceito), prefira {TOOL}."
+        # Glob is the native "find files by name" — treated like Bash `find` for
+        # consistency, so blocking find isn't defeated by routing through Glob.
+        deny(
+            f"Glob (achar arquivo por NOME) bloqueado. Se procura ONDE algo "
+            f"acontece no codigo (conceito), use {TOOL}. Se precisa MESMO achar "
+            f"arquivo por nome, use Bash `find ... # allow-grep: <motivo>`."
         )
         return 0
 
