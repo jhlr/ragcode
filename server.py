@@ -887,8 +887,10 @@ def code_search(
     out: list[str] = []
     for score, path, start, end, text in hits:
         snippet = "\n".join(text.splitlines()[:snippet_lines])
-        out.append(f"{path}:{start}-{end}  (score {score:.3f})\n{snippet}\n")
-    return "\n".join(out).strip()
+        out.append(f"{path}:{start}-{end}  (score {score:.3f})\n{snippet}")
+    # Separador explicito entre hits: os snippets sao codigo e podem conter
+    # linhas em branco, entao so uma linha vazia seria fronteira ambigua.
+    return ("\n" + "=" * 40 + "\n").join(out).strip()
 
 
 @mcp.tool()
@@ -899,12 +901,22 @@ def ollama_code_search(
     path_glob: str | None = None,
     snippet_lines: int = 8,
     model: str | None = None,
+    auto_index: bool = True,
 ) -> str:
     """Semantic search over the project's index (`.vscode/.ollama-mcp-index.sqlite`).
     Returns top-`k` chunks as `path:start-end` + snippet. Use BEFORE Read/Grep
     when looking for a concept ("where do we handle PDI recalculation?") instead
     of a literal string. `path_glob` filters (e.g. "frontend/src/**/*.tsx").
-    Also exposed as the `ollama-mcp-find` CLI. See `code_search`."""
+
+    Auto-reindexes (git-incremental, ~instant if nothing changed) before
+    searching — same behavior as the `ollama-mcp-find` CLI — so results reflect
+    the current tree. Pass `auto_index=False` to search the index as-is; the
+    first build on a fresh repo is slow (that one time only). See `code_search`."""
+    if auto_index:
+        try:
+            index_project(root=root, model=model)
+        except Exception:
+            pass  # best-effort refresh: still search whatever index exists
     return code_search(query=query, root=root, k=k, path_glob=path_glob,
                        snippet_lines=snippet_lines, model=model)
 

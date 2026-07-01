@@ -37,27 +37,34 @@ Gatilhos concretos:
    ao local em vez de deixar o stdout entrar no contexto.
 6. **Sinais explicitos do usuario.** "ta ficando grande", "economiza token",
    "resume isso", "varre esse log pra mim", "extrai X disso".
-7. **Busca conceitual em codigo (COMPORTAMENTO PADRAO).** Para encontrar
-   ONDE uma funcionalidade vive ("onde lidamos com auth/PDI/recalculo de
-   embedding"), o **primeiro passo e sempre** `ollama_code_search(query=...)`,
-   NAO `Grep`. Grep so acha string literal; o code_search acha o conceito
-   mesmo quando o nome no codigo e diferente. So caia pro Grep quando
-   procura um identificador/string exata, ou quando o code_search nao
-   retornou o que precisa.
-   - O indice fica em **`<root>/.vscode/.ollama-mcp-index.sqlite`** (toda
-     pasta de projeto tem `.vscode/`; gitignore o arquivo uma vez).
-   - **Manter atualizado e responsabilidade sua, mas barato:** o indice e
-     **incremental por commit** — re-rodar so re-embeda os arquivos que o
-     git reporta como mudados desde o ultimo sha indexado (commit + working
-     tree + untracked), e **respeita `.gitignore`**. Antes de uma rodada de
-     buscas, garanta o indice fresco rodando `ollama_index_project(root=...)`
-     (rapido se ja existe). Se o code_search responder "no index", rode o
-     index uma vez e repita a busca.
-   - **CLI fora do Claude:** buscar com `ollama-mcp-find "<query>" [-k N]`
-     (faz **auto-reindex git-incremental antes de cada busca** — sempre
-     fresco; `--no-index` pula). Indexar avulso com `ollama-mcp-index [root]`
-     (ou `--watch 300`). Mesmo motor, mesmo arquivo `.vscode/`. Resultados
-     no stdout, aviso `[reindex]` no stderr (use `2>/dev/null` p/ isolar).
+7. **Busca conceitual em codigo (COMPORTAMENTO PADRAO — use a tool MCP).**
+   Para encontrar ONDE uma funcionalidade vive ("onde lidamos com auth/PDI/
+   recalculo de embedding"), a **PRIMEIRA ferramenta e sempre** a tool MCP
+   `mcp__ollama-local__ollama_code_search` — **antes de Grep E antes do Bash
+   `ollama-mcp-find`**. Ela **auto-reindexa git-incremental antes de cada
+   busca** (sempre fresca, sem chamar index a parte) e devolve os hits como
+   `path:start-end` + snippet. Grep so acha string literal; o code_search acha
+   o conceito mesmo quando o nome no codigo e diferente.
+
+   ```
+   ollama_code_search(query="onde recalculamos o PDI", k=8)
+   ollama_code_search(query="config do PWA manifest", path_glob="frontend/**/*.tsx")
+   ```
+
+   - Params: `query`, `root` (default cwd), `k` (default 8), `path_glob`
+     (filtra path), `snippet_lines`, `auto_index` (default True — deixe ligado).
+   - Ordem de preferencia:
+     1. **tool MCP `ollama_code_search`** — SEMPRE o default.
+     2. **Bash `ollama-mcp-find "<query>" [-k N] [--glob ...]`** — mesmo motor,
+        mesmo auto-reindex; use **so se a tool MCP estiver indisponivel** (ex.:
+        servidor MCP nao carregado nesta sessao).
+     3. **Grep** — so pra identificador/string exata, ou quando o code_search
+        nao trouxe o que precisa.
+   - Indice em **`<root>/.vscode/.ollama-mcp-index.sqlite`** (toda pasta de
+     projeto tem `.vscode/`; gitignore o arquivo uma vez). Incremental por
+     commit, respeita `.gitignore`, ignora `.json`/`.csv`/lockfiles.
+   - Indexar avulso do terminal (opcional): `ollama-mcp-index [root]` (ou
+     `--watch 300`). Mesmo arquivo `.vscode/`.
 8. **Traducao para PT-BR.** Sempre que for traduzir qualquer coisa para
    portugues (copy de UI, mensagem de erro, README, comentario, e-mail),
    passe por `ollama_translate(target="pt-BR")` - o Gemma-Gaia foi tunado
@@ -141,9 +148,11 @@ no Ollama nao compensa.
   vez: `ollama pull bge-m3`.
 - `ollama_code_search(query, root, k, path_glob, snippet_lines, model)` —
   busca semantica top-k sobre o indice. Devolve `path:start-end` + snippet.
-  Use ANTES de Read/Grep quando procura conceito ("onde fazemos o
-  recalculo de PDI?") e nao string literal. Filtre com
-  `path_glob="frontend/src/**/*.tsx"`.
+  **Prefira o CLI Bash `ollama-mcp-find` (gatilho #7), que reindexa sozinho** —
+  esta tool MCP NAO reindexa, entao so use se o Bash nao estiver disponivel
+  (rode `ollama_index_project` antes se o indice puder estar velho). Use ANTES
+  de Read/Grep quando procura conceito ("onde fazemos o recalculo de PDI?") e
+  nao string literal. Filtre com `path_glob="frontend/src/**/*.tsx"`.
 - `ollama_ask(prompt, model, system, max_tokens)` — escape hatch generico
 - `ollama_list_models()` — lista modelos instalados no Ollama
 
