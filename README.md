@@ -114,17 +114,20 @@ ollama pull llama3.2             # general text
 ollama pull bge-m3               # multilingual embeddings
 ollama pull qwen2.5-coder:7b     # code/log/diff
 
-# 2. Bootstrap: venv + register the MCP at user scope + install the CLIs
+# 2. Install (run from the clone; you can delete it afterward)
+git clone https://github.com/jhlr/ragcode && cd ragcode
 ./install.sh
 
 # 3. Restart Claude Code. Tools appear as mcp__ragcode__ollama_*
 ```
 
-`install.sh` is idempotent. It creates `.venv`, installs `mcp` + `httpx`,
-registers the server with `claude mcp add` (if the `claude` CLI is present), and
-drops `ragcode-index` / `ragcode-find` into `~/.local/bin`. It does **not**
-touch your global Claude Code settings — the optional search-gate hook is a
-separate opt-in step (see below).
+`install.sh` is idempotent. It **copies the project into
+`~/.claude/skills/ragcode/`** (so the `/ragcode` skill loads), then, anchored
+there, creates `.venv`, installs `mcp` + `httpx`, registers the server with
+`claude mcp add` (if the `claude` CLI is present), and drops `ragcode-index` /
+`ragcode-find` into `~/.local/bin`. Everything is self-contained in the skill
+dir, so the clone is disposable. It does **not** touch your global Claude Code
+settings — the optional search-gate hook is a separate opt-in step (see below).
 
 Manual MCP registration, if needed:
 

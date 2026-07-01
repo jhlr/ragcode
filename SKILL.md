@@ -173,24 +173,21 @@ Cada tool aceita `model=` para override por chamada.
 # 1. Ollama rodando + modelos baixados
 brew install ollama
 ollama serve &
+ollama pull nomic-embed-text
 ollama pull llama3.2
 ollama pull qwen2.5-coder:7b
 
-# 2. Venv da skill
-cd ~/.claude/skills/ragcode
-python3 -m venv .venv
-.venv/bin/pip install mcp httpx
+# 2. Clonar e instalar (o clone e descartavel depois)
+git clone https://github.com/jhlr/ragcode && cd ragcode
+./install.sh          # copia pra ~/.claude/skills/ragcode + venv + MCP + CLIs
+./install-hook.sh     # opcional: gate de busca (PreToolUse)
 
-# 3. Registrar no Claude Code (user scope)
-claude mcp add ragcode --scope user -- \
-  ~/.claude/skills/ragcode/.venv/bin/python \
-  ~/.claude/skills/ragcode/server.py
-
-# 4. Reiniciar o Claude Code (sair e abrir de novo)
+# 3. Reiniciar o Claude Code (sair e abrir de novo)
 ```
 
-Apos reiniciar, as tools aparecem como `mcp__ragcode__ollama_summarize`
-etc. e podem ser chamadas diretamente.
+O `install.sh` copia o projeto pra `~/.claude/skills/ragcode/` e ancora tudo
+la (venv, servidor MCP, CLIs). Apos reiniciar, as tools aparecem como
+`mcp__ragcode__ollama_summarize` etc. e a skill `/ragcode` fica disponivel.
 
 ## Quando usar (heuristica)
 

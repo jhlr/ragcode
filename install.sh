@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Bootstrap the ragcode skill on a new machine.
-# Idempotent: safe to re-run.
+# Idempotent: safe to re-run. Run it from a fresh github clone — it installs
+# itself into ~/.claude/skills/ragcode and anchors everything there.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -13,6 +14,28 @@ fi
 if ! command -v ollama >/dev/null 2>&1; then
   echo "warning: ollama not on PATH. install from https://ollama.com" >&2
 fi
+
+# Install as a Claude Code skill: copy the project into ~/.claude/skills/ragcode
+# so `/ragcode` loads and the whole setup (venv, MCP server, CLIs) is anchored
+# there and self-contained. You can delete the clone afterward. Skipped when
+# already running from the skill dir (in-place re-runs / updates).
+SKILL_DIR="$HOME/.claude/skills/ragcode"
+if [ "$HERE" != "$SKILL_DIR" ]; then
+  mkdir -p "$SKILL_DIR"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude '.git' --exclude '.venv' --exclude '__pycache__' --exclude '*.pyc' \
+      "$HERE"/ "$SKILL_DIR"/
+  else  # portable fallback if rsync is absent
+    ( cd "$HERE" && find . \( -name .git -o -name .venv -o -name __pycache__ \) -prune -o \
+        -type f ! -name '*.pyc' -print | while IFS= read -r f; do
+        mkdir -p "$SKILL_DIR/$(dirname "$f")"; cp "$f" "$SKILL_DIR/$f"
+      done )
+  fi
+  echo "installed skill files into $SKILL_DIR"
+fi
+HERE="$SKILL_DIR"
+cd "$HERE"
 
 if [ ! -d .venv ]; then
   python3 -m venv .venv
