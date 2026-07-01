@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""PreToolUse gate that steers code search toward the ollama-mcp semantic index.
+"""PreToolUse gate that steers code search toward the ragcode semantic index.
 
 Reads the hook payload on stdin and:
   - Grep tool: BLOCKS natural-language / conceptual patterns (deny), telling
-    Claude to use mcp__ollama-local__ollama_code_search instead. Exact-string /
+    Claude to use mcp__ragcode__ollama_code_search instead. Exact-string /
     identifier / regex searches pass through untouched.
   - Bash running grep/rg/find, and the Glob tool: non-blocking REMINDER only.
 
@@ -14,7 +14,7 @@ import json
 import re
 import sys
 
-TOOL = "mcp__ollama-local__ollama_code_search"
+TOOL = "mcp__ragcode__ollama_code_search"
 
 # Stopwords that signal a natural-language query rather than a code token.
 STOP = {
@@ -84,8 +84,8 @@ def main() -> int:
         if is_conceptual(pat):
             deny(
                 f"Busca conceitual detectada: \"{pat}\". Use {TOOL} "
-                "(busca semantica no indice ollama-mcp) em vez de grep para "
-                "encontrar codigo por CONCEITO. Se o servidor ollama-local nao "
+                "(busca semantica no indice ragcode) em vez de grep para "
+                "encontrar codigo por CONCEITO. Se o servidor ragcode nao "
                 "estiver carregado nesta sessao, OU se esta e mesmo uma busca "
                 "por string/identificador exato, refaca via Bash: "
                 "`grep -rn '<pattern>' .  # allow-grep`."

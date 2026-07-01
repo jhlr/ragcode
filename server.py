@@ -29,14 +29,17 @@ EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
 # back (requires a rebuild — the index pins its model).
 CODE_EMBED_MODEL = os.environ.get("OLLAMA_CODE_EMBED_MODEL", "nomic-embed-text:latest")
 EMBED_BATCH = int(os.environ.get("OLLAMA_EMBED_BATCH", "64"))
-INDEX_FILENAME = ".ollama-mcp-index.sqlite"
+INDEX_FILENAME = "ragcode-index.sqlite"
+# Older index filenames we still read from and migrate into the canonical name
+# (so an existing index survives the rename without a rebuild).
+LEGACY_INDEX_NAMES = [".ollama-mcp-index.sqlite"]
 # Canonical location: every project has a .git/ — keep the index there so it
 # stays out of source trees and is trivially gitignored once.
 INDEX_SUBDIR = ".git"
 
 MAX_INPUT_CHARS = 200_000
 
-mcp = FastMCP("ollama-local")
+mcp = FastMCP("ragcode")
 
 
 def _generate(model: str, prompt: str, system: str | None = None, num_predict: int = 512) -> str:
@@ -539,21 +542,39 @@ def _unpack_vec(b: bytes) -> list[float]:
     return list(struct.unpack(f"{n}f", b))
 
 
+def _index_anchor(root_p: Path, max_up: int = 3) -> Path:
+    """Directory whose .git/ holds the index. Usually root_p, but if root_p has
+    no .git/ (you're in a subfolder), walk up to `max_up` levels looking for one
+    so the whole repo shares a single index. Falls back to root_p if none found."""
+    p = root_p
+    for _ in range(max_up + 1):  # root_p itself + up to max_up ancestors
+        if (p / INDEX_SUBDIR).is_dir():
+            return p
+        if p.parent == p:  # filesystem root
+            break
+        p = p.parent
+    return root_p
+
+
 def _index_path(root_p: Path) -> Path:
-    """Canonical index location: <root>/.git/.ollama-mcp-index.sqlite."""
-    return root_p / INDEX_SUBDIR / INDEX_FILENAME
+    """Canonical index location: <anchor>/.git/ragcode-index.sqlite, where anchor
+    is root_p or the nearest ancestor (<= 3 levels up) that has a .git/."""
+    return _index_anchor(root_p) / INDEX_SUBDIR / INDEX_FILENAME
 
 
 def _resolve_index(root_p: Path) -> Path:
-    """Prefer the .git/ index; fall back to a legacy location (old .vscode/ or
-    root-level index) if that is the only one present, so old indexes keep
-    working until rebuilt."""
-    new = _index_path(root_p)
+    """Prefer the canonical .git/ index; otherwise fall back to a legacy index
+    (older filename, or an old .vscode/ or root-level location) if that is the
+    only one present, so pre-rename indexes keep working until re-indexed."""
+    anchor = _index_anchor(root_p)
+    new = anchor / INDEX_SUBDIR / INDEX_FILENAME
     if new.exists():
         return new
-    for legacy in (root_p / ".vscode" / INDEX_FILENAME, root_p / INDEX_FILENAME):
-        if legacy.exists():
-            return legacy
+    for name in [INDEX_FILENAME, *LEGACY_INDEX_NAMES]:
+        for base in (anchor / INDEX_SUBDIR, root_p / ".vscode", root_p):
+            legacy = base / name
+            if legacy != new and legacy.exists():
+                return legacy
     return new
 
 
@@ -702,7 +723,7 @@ def index_project(
     """Index a project for semantic code search. Walks `root` (default cwd),
     chunks each file into sliding windows of `window` lines (overlap=12),
     embeds each chunk with bge-m3 (multilingual, good for code+PT-BR comments),
-    and stores everything in `.git/.ollama-mcp-index.sqlite` at the project
+    and stores everything in `.git/ragcode-index.sqlite` at the project
     root (kept out of the source tree; gitignore it once).
 
     Incremental by commit: when `root` is a git repo's top level and an index
@@ -717,12 +738,13 @@ def index_project(
 
     db_path = _index_path(root_p)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    legacy = root_p / INDEX_FILENAME
-    if legacy.exists() and not rebuild:  # migrate old root-level index into .git/
-        if not db_path.exists():
-            legacy.replace(db_path)
-        else:
-            legacy.unlink()
+    if not rebuild:  # migrate any legacy index (old name/location) into .git/
+        legacy = _resolve_index(root_p)
+        if legacy != db_path and legacy.exists():
+            if not db_path.exists():
+                legacy.replace(db_path)
+            else:
+                legacy.unlink()
     if rebuild and db_path.exists():
         db_path.unlink()
 
@@ -826,9 +848,9 @@ def ollama_index_project(
     rebuild: bool = False,
 ) -> str:
     """Index a project for semantic code search. Stores the index in
-    `.git/.ollama-mcp-index.sqlite` and refreshes incrementally by commit
+    `.git/ragcode-index.sqlite` and refreshes incrementally by commit
     (only git-changed files since the last indexed sha). Respects .gitignore.
-    Usually you don't call this directly — the `ollama-mcp-index` CLI keeps it
+    Usually you don't call this directly — the `ragcode-index` CLI keeps it
     fresh from a terminal. See `index_project` for the full contract."""
     return index_project(root=root, globs=globs, window=window, overlap=overlap,
                          model=model, rebuild=rebuild)
@@ -854,7 +876,7 @@ def code_search(
     root_p = Path(root).expanduser().resolve()
     db_path = _resolve_index(root_p)
     if not db_path.exists():
-        return (f"no index at {db_path}. run `ollama-mcp-index {root_p}` in a "
+        return (f"no index at {db_path}. run `ragcode-index {root_p}` in a "
                 "terminal (or ollama_index_project) first.")
 
     conn = sqlite3.connect(db_path)
@@ -904,13 +926,13 @@ def ollama_code_search(
     model: str | None = None,
     auto_index: bool = True,
 ) -> str:
-    """Semantic search over the project's index (`.git/.ollama-mcp-index.sqlite`).
+    """Semantic search over the project's index (`.git/ragcode-index.sqlite`).
     Returns top-`k` chunks as `path:start-end` + snippet. Use BEFORE Read/Grep
     when looking for a concept ("where do we handle PDI recalculation?") instead
     of a literal string. `path_glob` filters (e.g. "frontend/src/**/*.tsx").
 
     Auto-reindexes (git-incremental, ~instant if nothing changed) before
-    searching — same behavior as the `ollama-mcp-find` CLI — so results reflect
+    searching — same behavior as the `ragcode-find` CLI — so results reflect
     the current tree. Pass `auto_index=False` to search the index as-is; the
     first build on a fresh repo is slow (that one time only). See `code_search`."""
     if auto_index:

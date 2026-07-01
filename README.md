@@ -1,4 +1,4 @@
-# ollama-mcp
+# ragcode
 
 A stdio **MCP server** (and Claude Code skill) that exposes a **local Ollama**
 instance as a set of tools. The point: offload bulky, low-reasoning work —
@@ -8,7 +8,7 @@ runs locally and never enters the agent's context window; only the compact
 result comes back.
 
 It also ships a **semantic code index** that lives in
-`.git/.ollama-mcp-index.sqlite`, refreshes **incrementally by git commit**,
+`.git/ragcode-index.sqlite`, refreshes **incrementally by git commit**,
 honors `.gitignore`, and is usable both as MCP tools and as two terminal CLIs.
 
 ---
@@ -29,9 +29,9 @@ grunt, delegate it here.
 ## How it works
 
 ```
-Claude / CLI ──▶ ollama-mcp (server.py) ──▶ http://localhost:11434 (Ollama)
+Claude / CLI ──▶ ragcode (server.py) ──▶ http://localhost:11434 (Ollama)
                       │
-                      └─▶ .git/.ollama-mcp-index.sqlite   (semantic code index)
+                      └─▶ .git/ragcode-index.sqlite   (semantic code index)
 ```
 
 Pure stdio, no auth, local-only by design.
@@ -68,19 +68,22 @@ the right file, regardless of the function name).
 
 ```bash
 # Build/refresh the index (commit-incremental, ~instant after the first build)
-ollama-mcp-index .
+ragcode-index .
 
 # Search by concept; returns path:start-end + a snippet per hit
-ollama-mcp-find "where do we recalculate the PDI?" -k 8
-ollama-mcp-find "fallback de provedor de LLM" --glob 'backend/**/*.ts'
+ragcode-find "where do we recalculate the PDI?" -k 8
+ragcode-find "fallback de provedor de LLM" --glob 'backend/**/*.ts'
 ```
 
 Design notes:
 
-- **Location:** `<root>/.git/.ollama-mcp-index.sqlite`. Living inside `.git/`
+- **Location:** `<repo>/.git/ragcode-index.sqlite`. Living inside `.git/`
   keeps it out of the working tree, so git never tracks it — no `.gitignore`
-  entry needed. (Old indexes in `.vscode/` or the repo root are still read as a
-  fallback until rebuilt.)
+  entry needed (and no leading dot, since `.git/` is already hidden). If you run
+  from a subfolder without its own `.git/`, it walks up to 3 levels to find the
+  repo's `.git/` so the whole repo shares one index. (Old indexes — the previous
+  `.ollama-mcp-index.sqlite` name, or `.vscode/`/root locations — are still read
+  and migrated on the next index.)
 - **Incremental by commit:** in a git repo, re-running only re-embeds the files
   git reports as changed since the last indexed SHA (committed diff + working
   tree + untracked) and prunes deletions. Outside git, it falls back to an
@@ -88,7 +91,7 @@ Design notes:
 - **Honors `.gitignore`** (enumerates via `git ls-files`).
 - **Skips data:** `.json`, `.csv`, `.tsv`, `.parquet`, lockfiles, and minified
   blobs are excluded — they're data, not code, and they bloat the index.
-- **`ollama-mcp-find` auto-reindexes** before each search, so results always
+- **`ragcode-find` auto-reindexes** before each search, so results always
   reflect the current tree (pass `--no-index` to skip). Results go to stdout,
   the reindex note to stderr.
 
@@ -114,20 +117,20 @@ ollama pull qwen2.5-coder:7b     # code/log/diff
 # 2. Bootstrap: venv + register the MCP at user scope + install the CLIs
 ./install.sh
 
-# 3. Restart Claude Code. Tools appear as mcp__ollama-local__ollama_*
+# 3. Restart Claude Code. Tools appear as mcp__ragcode__ollama_*
 ```
 
 `install.sh` is idempotent. It creates `.venv`, installs `mcp` + `httpx`,
 registers the server with `claude mcp add` (if the `claude` CLI is present), and
-drops `ollama-mcp-index` / `ollama-mcp-find` into `~/.local/bin`. It does **not**
+drops `ragcode-index` / `ragcode-find` into `~/.local/bin`. It does **not**
 touch your global Claude Code settings — the optional search-gate hook is a
 separate opt-in step (see below).
 
 Manual MCP registration, if needed:
 
 ```bash
-claude mcp add ollama-local --scope user -- \
-  /path/to/ollama-mcp/.venv/bin/python /path/to/ollama-mcp/server.py
+claude mcp add ragcode --scope user -- \
+  /path/to/ragcode/.venv/bin/python /path/to/ragcode/server.py
 ```
 
 ---
@@ -143,12 +146,12 @@ because it writes to your **global** `~/.claude/settings.json`:
 ./install-hook.sh --uninstall  # remove the hook + script
 ```
 
-It installs `hooks/ollama-search-gate.py` into `~/.claude/hooks/` and merges a
+It installs `hooks/ragcode-search-gate.py` into `~/.claude/hooks/` and merges a
 `Grep|Glob|Bash` block into `~/.claude/settings.json`. Behavior:
 
 - **`Grep` tool + conceptual pattern** (natural-language phrase, e.g. `onde
   recalcula o PDI`) → **blocked**, with a message to use
-  `mcp__ollama-local__ollama_code_search`. Exact identifiers, quoted strings and
+  `mcp__ragcode__ollama_code_search`. Exact identifiers, quoted strings and
   regex (`validateToken`, `def .*embed`, `class Foo`) pass through.
 - **Bash `grep`/`rg`/`find` and the `Glob` tool** → non-blocking reminder only.
 - **Escape hatch:** append `# allow-grep` to any Bash command to silence the

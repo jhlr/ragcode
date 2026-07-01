@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""CLI front-end for the ollama-mcp semantic index.
+"""CLI front-end for the ragcode semantic index.
 
 Lets you (re)build the project index from a terminal, independent of any
-Claude session. The index lives in `<root>/.git/.ollama-mcp-index.sqlite`,
+Claude session. The index lives in `<root>/.git/ragcode-index.sqlite`,
 refreshes incrementally by commit, and respects .gitignore.
 
 Usage:
-    ollama-mcp-index                 # index the current directory
-    ollama-mcp-index /path/to/repo   # index a specific repo
-    ollama-mcp-index --rebuild       # wipe and re-embed from scratch
-    ollama-mcp-index --watch 300     # re-index every 300s (commit-incremental)
+    ragcode-index                 # index the current directory
+    ragcode-index /path/to/repo   # index a specific repo
+    ragcode-index --rebuild       # wipe and re-embed from scratch
+    ragcode-index --watch 300     # re-index every 300s (commit-incremental)
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ def _run(args: argparse.Namespace) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        prog="ollama-mcp-index",
-        description="Build/refresh the ollama-mcp semantic code index "
-                    "(.git/.ollama-mcp-index.sqlite, commit-incremental, "
+        prog="ragcode-index",
+        description="Build/refresh the ragcode semantic code index "
+                    "(.git/ragcode-index.sqlite, commit-incremental, "
                     "honors .gitignore).",
     )
     ap.add_argument("root", nargs="?", default=".", help="project root (default: cwd)")

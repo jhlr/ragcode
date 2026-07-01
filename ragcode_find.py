@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""CLI front-end for ollama-mcp semantic code search.
+"""CLI front-end for ragcode semantic code search.
 
 Takes a natural-language query and prints the top matching code locations
 (`path:start-end` + snippet) from the project's index
-(`<root>/.git/.ollama-mcp-index.sqlite`). Finds a CONCEPT, not a literal
+(`<root>/.git/ragcode-index.sqlite`). Finds a CONCEPT, not a literal
 string — use it when grep won't cut it.
 
 Usage:
-    ollama-mcp-find "where do we recalculate the PDI?"
-    ollama-mcp-find onde validamos o token de auth -k 15
-    ollama-mcp-find "embedding recompute" --root /path/to/repo --glob 'backend/**/*.ts'
+    ragcode-find "where do we recalculate the PDI?"
+    ragcode-find onde validamos o token de auth -k 15
+    ragcode-find "embedding recompute" --root /path/to/repo --glob 'backend/**/*.ts'
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ import server  # noqa: E402  (path set above)
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        prog="ollama-mcp-find",
-        description="Semantic code search over the ollama-mcp index. Returns the "
+        prog="ragcode-find",
+        description="Semantic code search over the ragcode index. Returns the "
                     "top matching locations for a natural-language query.",
     )
     ap.add_argument("query", nargs="+", help="what you're looking for (free text)")

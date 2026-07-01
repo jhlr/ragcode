@@ -1,9 +1,9 @@
 ---
-name: ollama-mcp
+name: ragcode
 description: Servidor MCP stdio que expoe Ollama local como tools (summarize, extract, classify, grep_explain, ask) para o Claude delegar trabalho "bruto" e nao queimar contexto. CARREGUE PROATIVAMENTE quando detectar trabalho de alto volume e baixo raciocinio - antes de ler arquivo > 2k linhas, antes de grep em log/dump grande, em batches (classificar/extrair N itens), quando o usuario disser "economizar token / esta ficando grande / resume isso / extraia X de Y / rodar local / usar ollama".
 ---
 
-# ollama-mcp
+# ragcode
 
 Servidor MCP que da ao Claude Code acesso a um Ollama local. A ideia: tarefas
 volumosas e baratas (resumir log de 5k linhas, classificar 200 tickets, extrair
@@ -14,7 +14,7 @@ para o contexto do Claude. O texto bruto nunca entra.
 
 Antes de Read/Bash que va trazer texto cru pro contexto, **pare e pergunte**:
 "isso e raciocinio que so o Claude faz, ou e trabalho bruto que o local resolve?"
-Se for bruto, use ollama-mcp.
+Se for bruto, use ragcode.
 
 Gatilhos concretos:
 
@@ -40,8 +40,8 @@ Gatilhos concretos:
 7. **Busca conceitual em codigo (COMPORTAMENTO PADRAO — use a tool MCP).**
    Para encontrar ONDE uma funcionalidade vive ("onde lidamos com auth/PDI/
    recalculo de embedding"), a **PRIMEIRA ferramenta e sempre** a tool MCP
-   `mcp__ollama-local__ollama_code_search` — **antes de Grep E antes do Bash
-   `ollama-mcp-find`**. Ela **auto-reindexa git-incremental antes de cada
+   `mcp__ragcode__ollama_code_search` — **antes de Grep E antes do Bash
+   `ragcode-find`**. Ela **auto-reindexa git-incremental antes de cada
    busca** (sempre fresca, sem chamar index a parte) e devolve os hits como
    `path:start-end` + snippet. Grep so acha string literal; o code_search acha
    o conceito mesmo quando o nome no codigo e diferente.
@@ -55,15 +55,15 @@ Gatilhos concretos:
      (filtra path), `snippet_lines`, `auto_index` (default True — deixe ligado).
    - Ordem de preferencia:
      1. **tool MCP `ollama_code_search`** — SEMPRE o default.
-     2. **Bash `ollama-mcp-find "<query>" [-k N] [--glob ...]`** — mesmo motor,
+     2. **Bash `ragcode-find "<query>" [-k N] [--glob ...]`** — mesmo motor,
         mesmo auto-reindex; use **so se a tool MCP estiver indisponivel** (ex.:
         servidor MCP nao carregado nesta sessao).
      3. **Grep** — so pra identificador/string exata, ou quando o code_search
         nao trouxe o que precisa.
-   - Indice em **`<root>/.git/.ollama-mcp-index.sqlite`** (dentro de `.git/`,
+   - Indice em **`<root>/.git/ragcode-index.sqlite`** (dentro de `.git/`,
      entao git nunca versiona — sem precisar de `.gitignore`). Incremental por
      commit, respeita `.gitignore`, ignora `.json`/`.csv`/lockfiles.
-   - Indexar avulso do terminal (opcional): `ollama-mcp-index [root]` (ou
+   - Indexar avulso do terminal (opcional): `ragcode-index [root]` (ou
      `--watch 300`). Mesmo arquivo em `.git/`.
 8. **Traducao para PT-BR.** Sempre que for traduzir qualquer coisa para
    portugues (copy de UI, mensagem de erro, README, comentario, e-mail),
@@ -93,7 +93,7 @@ no Ollama nao compensa.
 
 1. Detectou gatilho → enuncie em uma linha: "esse arquivo tem 6k linhas,
    vou pedir pro local resumir antes de olhar".
-2. Chame a tool MCP apropriada (`mcp__ollama-local__ollama_*`).
+2. Chame a tool MCP apropriada (`mcp__ragcode__ollama_*`).
 3. Trabalhe so com o resultado compacto. Se o resultado parecer suspeito,
    ai sim leia o trecho especifico do original com `Read offset/limit`.
 
@@ -138,17 +138,17 @@ no Ollama nao compensa.
 - `ollama_index_project(root, globs, window, overlap, model, rebuild)` —
   indexa um projeto para busca semantica. Chunka em janelas de 40 linhas
   com overlap 10, embeda com **bge-m3** (multilingue, bom em codigo +
-  PT-BR) e salva em **`<root>/.git/.ollama-mcp-index.sqlite`** (le
+  PT-BR) e salva em **`<root>/.git/ragcode-index.sqlite`** (le
   automaticamente um indice legado em `.vscode/` ou na raiz). **Incremental por commit:**
   num repo git, re-roda so re-embeda os arquivos que o git reporta como
   mudados desde o ultimo sha indexado (commit + working tree + untracked)
   e poda os deletados; fora de git, cai pra full-walk por mtime. **Respeita
   `.gitignore`** (enumera via `git ls-files`). Tambem exposto como CLI
-  global `ollama-mcp-index [root] [--rebuild] [--watch SECONDS]`. Primeira
+  global `ragcode-index [root] [--rebuild] [--watch SECONDS]`. Primeira
   vez: `ollama pull bge-m3`.
 - `ollama_code_search(query, root, k, path_glob, snippet_lines, model)` —
   busca semantica top-k sobre o indice. Devolve `path:start-end` + snippet.
-  **Prefira o CLI Bash `ollama-mcp-find` (gatilho #7), que reindexa sozinho** —
+  **Prefira o CLI Bash `ragcode-find` (gatilho #7), que reindexa sozinho** —
   esta tool MCP NAO reindexa, entao so use se o Bash nao estiver disponivel
   (rode `ollama_index_project` antes se o indice puder estar velho). Use ANTES
   de Read/Grep quando procura conceito ("onde fazemos o recalculo de PDI?") e
@@ -177,19 +177,19 @@ ollama pull llama3.2
 ollama pull qwen2.5-coder:7b
 
 # 2. Venv da skill
-cd ~/.claude/skills/ollama-mcp
+cd ~/.claude/skills/ragcode
 python3 -m venv .venv
 .venv/bin/pip install mcp httpx
 
 # 3. Registrar no Claude Code (user scope)
-claude mcp add ollama-local --scope user -- \
-  ~/.claude/skills/ollama-mcp/.venv/bin/python \
-  ~/.claude/skills/ollama-mcp/server.py
+claude mcp add ragcode --scope user -- \
+  ~/.claude/skills/ragcode/.venv/bin/python \
+  ~/.claude/skills/ragcode/server.py
 
 # 4. Reiniciar o Claude Code (sair e abrir de novo)
 ```
 
-Apos reiniciar, as tools aparecem como `mcp__ollama-local__ollama_summarize`
+Apos reiniciar, as tools aparecem como `mcp__ragcode__ollama_summarize`
 etc. e podem ser chamadas diretamente.
 
 ## Quando usar (heuristica)

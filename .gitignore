@@ -2,6 +2,6 @@
 __pycache__/
 *.pyc
 *.sqlite
-.ollama-mcp-index.sqlite
-**/.ollama-mcp-index.sqlite
+ragcode-index.sqlite
+**/ragcode-index.sqlite
 .DS_Store
