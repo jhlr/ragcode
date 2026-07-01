@@ -1,9 +1,0 @@
-{
-  "servers": {
-    "ragcode": {
-      "type": "stdio",
-      "command": "${userHome}/.claude/skills/ragcode/.venv/bin/python",
-      "args": ["${userHome}/.claude/skills/ragcode/server.py"]
-    }
-  }
-}

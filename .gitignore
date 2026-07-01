@@ -5,3 +5,8 @@ __pycache__/
 ragcode-index.sqlite
 **/ragcode-index.sqlite
 .DS_Store
+
+# ragcode: generated MCP client configs (recreated by `ragcode-index`)
+.vscode/mcp.json
+opencode.json
+.github/copilot-instructions.md
