@@ -15,12 +15,88 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import server  # noqa: E402  (path set above)
+
+
+# --- client wiring seeded on first index ------------------------------------
+# The ragcode skill installs to ~/.claude/skills/ragcode (see install.sh), so
+# the MCP command is portable across users when written with each client's
+# home-dir variable: VS Code/Copilot resolve ${userHome}, opencode resolves
+# {env:HOME}. Files are only written when absent — never overwrite user configs.
+_SKILL_REL = ".claude/skills/ragcode"
+
+_SEARCH_INSTRUCTION = """\
+# {title}
+
+## Code search — prefer the ragcode semantic index
+
+A `ragcode` MCP server is configured for this workspace. When it is available,
+use it as the default way to search code:
+
+- To find **where/what** something happens (a concept, a behavior, "where do we
+  handle X") → call `ollama_code_search` first, before `grep`/search/`find`.
+- Use text search only for **exact** strings/identifiers you already know exist,
+  and file search only to locate a file by **name**.
+- When reading, go straight to a specific range if you know the spot; only pull
+  a whole large file into context when a targeted read won't do — prefer
+  `ollama_summarize` / `ollama_grep_explain` for bulk understanding.
+
+The index lives at `<repo>/.git/ragcode-index.sqlite`; run `ragcode-index` once
+per repo to build it. Requires a local Ollama (https://ollama.com) running and
+the ragcode skill installed at `~/{skill}`.
+"""
+
+
+def _client_configs() -> dict[str, str]:
+    """Map of repo-relative path -> file contents for the three client configs."""
+    vscode_mcp = {
+        "servers": {
+            "ragcode": {
+                "type": "stdio",
+                "command": "${userHome}/" + _SKILL_REL + "/.venv/bin/python",
+                "args": ["${userHome}/" + _SKILL_REL + "/server.py"],
+            }
+        }
+    }
+    opencode = {
+        "$schema": "https://opencode.ai/config.json",
+        "mcp": {
+            "ragcode": {
+                "type": "local",
+                "command": [
+                    "{env:HOME}/" + _SKILL_REL + "/.venv/bin/python",
+                    "{env:HOME}/" + _SKILL_REL + "/server.py",
+                ],
+                "enabled": True,
+            }
+        },
+    }
+    return {
+        ".vscode/mcp.json": json.dumps(vscode_mcp, indent=2) + "\n",
+        "opencode.json": json.dumps(opencode, indent=2) + "\n",
+        ".github/copilot-instructions.md": _SEARCH_INSTRUCTION.format(
+            title="Copilot instructions", skill=_SKILL_REL),
+    }
+
+
+def _seed_client_configs(anchor: Path) -> list[str]:
+    """Write any missing client-config files under `anchor`. Returns the list of
+    repo-relative paths actually created (existing files are left untouched)."""
+    written = []
+    for rel, content in _client_configs().items():
+        dest = anchor / rel
+        if dest.exists():
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(content)
+        written.append(rel)
+    return written
 
 
 def _run(args: argparse.Namespace) -> str:
@@ -49,6 +125,9 @@ def main() -> int:
     ap.add_argument("--overlap", type=int, default=12, help="chunk overlap in lines")
     ap.add_argument("--watch", type=int, metavar="SECONDS",
                     help="re-index on a loop every SECONDS (Ctrl-C to stop)")
+    ap.add_argument("--no-config", action="store_true",
+                    help="don't seed client configs (.vscode/mcp.json, "
+                         "opencode.json, .github/copilot-instructions.md) on first index")
     args = ap.parse_args()
 
     root = Path(args.root).expanduser().resolve()
@@ -56,8 +135,16 @@ def main() -> int:
         print(f"not a directory: {root}", file=sys.stderr)
         return 2
 
+    # "First index" = no index resolvable yet. Seed client wiring once, after a
+    # successful build, so a fresh clone becomes plug-n-play with one command.
+    first_index = not server._resolve_index(root).exists()
+
     try:
         print(_run(args))
+        if first_index and not args.no_config:
+            written = _seed_client_configs(server._index_anchor(root))
+            if written:
+                print("seeded client configs: " + ", ".join(written))
         args.rebuild = False  # only the first pass of --watch should rebuild
         while args.watch:
             time.sleep(args.watch)
