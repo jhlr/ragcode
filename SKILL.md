@@ -60,11 +60,11 @@ Gatilhos concretos:
         servidor MCP nao carregado nesta sessao).
      3. **Grep** — so pra identificador/string exata, ou quando o code_search
         nao trouxe o que precisa.
-   - Indice em **`<root>/.vscode/.ollama-mcp-index.sqlite`** (toda pasta de
-     projeto tem `.vscode/`; gitignore o arquivo uma vez). Incremental por
+   - Indice em **`<root>/.git/.ollama-mcp-index.sqlite`** (dentro de `.git/`,
+     entao git nunca versiona — sem precisar de `.gitignore`). Incremental por
      commit, respeita `.gitignore`, ignora `.json`/`.csv`/lockfiles.
    - Indexar avulso do terminal (opcional): `ollama-mcp-index [root]` (ou
-     `--watch 300`). Mesmo arquivo `.vscode/`.
+     `--watch 300`). Mesmo arquivo em `.git/`.
 8. **Traducao para PT-BR.** Sempre que for traduzir qualquer coisa para
    portugues (copy de UI, mensagem de erro, README, comentario, e-mail),
    passe por `ollama_translate(target="pt-BR")` - o Gemma-Gaia foi tunado
@@ -138,8 +138,8 @@ no Ollama nao compensa.
 - `ollama_index_project(root, globs, window, overlap, model, rebuild)` —
   indexa um projeto para busca semantica. Chunka em janelas de 40 linhas
   com overlap 10, embeda com **bge-m3** (multilingue, bom em codigo +
-  PT-BR) e salva em **`<root>/.vscode/.ollama-mcp-index.sqlite`** (migra
-  automaticamente um indice legado na raiz). **Incremental por commit:**
+  PT-BR) e salva em **`<root>/.git/.ollama-mcp-index.sqlite`** (le
+  automaticamente um indice legado em `.vscode/` ou na raiz). **Incremental por commit:**
   num repo git, re-roda so re-embeda os arquivos que o git reporta como
   mudados desde o ultimo sha indexado (commit + working tree + untracked)
   e poda os deletados; fora de git, cai pra full-walk por mtime. **Respeita

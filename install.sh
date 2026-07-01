@@ -48,3 +48,4 @@ else
 fi
 
 echo "done. restart claude code to load the tools."
+echo "optional: ./install-hook.sh  # PreToolUse gate steering search to the index"

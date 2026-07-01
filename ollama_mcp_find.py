@@ -3,7 +3,7 @@
 
 Takes a natural-language query and prints the top matching code locations
 (`path:start-end` + snippet) from the project's index
-(`<root>/.vscode/.ollama-mcp-index.sqlite`). Finds a CONCEPT, not a literal
+(`<root>/.git/.ollama-mcp-index.sqlite`). Finds a CONCEPT, not a literal
 string — use it when grep won't cut it.
 
 Usage:

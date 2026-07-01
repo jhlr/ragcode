@@ -8,7 +8,7 @@ runs locally and never enters the agent's context window; only the compact
 result comes back.
 
 It also ships a **semantic code index** that lives in
-`.vscode/.ollama-mcp-index.sqlite`, refreshes **incrementally by git commit**,
+`.git/.ollama-mcp-index.sqlite`, refreshes **incrementally by git commit**,
 honors `.gitignore`, and is usable both as MCP tools and as two terminal CLIs.
 
 ---
@@ -31,7 +31,7 @@ grunt, delegate it here.
 ```
 Claude / CLI ──▶ ollama-mcp (server.py) ──▶ http://localhost:11434 (Ollama)
                       │
-                      └─▶ .vscode/.ollama-mcp-index.sqlite   (semantic code index)
+                      └─▶ .git/.ollama-mcp-index.sqlite   (semantic code index)
 ```
 
 Pure stdio, no auth, local-only by design.
@@ -77,8 +77,10 @@ ollama-mcp-find "fallback de provedor de LLM" --glob 'backend/**/*.ts'
 
 Design notes:
 
-- **Location:** `<root>/.vscode/.ollama-mcp-index.sqlite`. Every project has a
-  `.vscode/`; gitignore the file once and forget it.
+- **Location:** `<root>/.git/.ollama-mcp-index.sqlite`. Living inside `.git/`
+  keeps it out of the working tree, so git never tracks it — no `.gitignore`
+  entry needed. (Old indexes in `.vscode/` or the repo root are still read as a
+  fallback until rebuilt.)
 - **Incremental by commit:** in a git repo, re-running only re-embeds the files
   git reports as changed since the last indexed SHA (committed diff + working
   tree + untracked) and prunes deletions. Outside git, it falls back to an
@@ -117,7 +119,9 @@ ollama pull qwen2.5-coder:7b     # code/log/diff
 
 `install.sh` is idempotent. It creates `.venv`, installs `mcp` + `httpx`,
 registers the server with `claude mcp add` (if the `claude` CLI is present), and
-drops `ollama-mcp-index` / `ollama-mcp-find` into `~/.local/bin`.
+drops `ollama-mcp-index` / `ollama-mcp-find` into `~/.local/bin`. It does **not**
+touch your global Claude Code settings — the optional search-gate hook is a
+separate opt-in step (see below).
 
 Manual MCP registration, if needed:
 
@@ -125,6 +129,34 @@ Manual MCP registration, if needed:
 claude mcp add ollama-local --scope user -- \
   /path/to/ollama-mcp/.venv/bin/python /path/to/ollama-mcp/server.py
 ```
+
+---
+
+## Search-gate hook (optional)
+
+An opt-in Claude Code `PreToolUse` hook that steers code search toward the
+semantic index instead of raw text search. It's separate from `install.sh`
+because it writes to your **global** `~/.claude/settings.json`:
+
+```bash
+./install-hook.sh              # install / update (idempotent)
+./install-hook.sh --uninstall  # remove the hook + script
+```
+
+It installs `hooks/ollama-search-gate.py` into `~/.claude/hooks/` and merges a
+`Grep|Glob|Bash` block into `~/.claude/settings.json`. Behavior:
+
+- **`Grep` tool + conceptual pattern** (natural-language phrase, e.g. `onde
+  recalcula o PDI`) → **blocked**, with a message to use
+  `mcp__ollama-local__ollama_code_search`. Exact identifiers, quoted strings and
+  regex (`validateToken`, `def .*embed`, `class Foo`) pass through.
+- **Bash `grep`/`rg`/`find` and the `Glob` tool** → non-blocking reminder only.
+- **Escape hatch:** append `# allow-grep` to any Bash command to silence the
+  reminder / bypass the gate for a genuine exact search.
+
+The merge is idempotent and never clobbers existing settings or other hooks. To
+review or disable it later, use `/hooks` in Claude Code, or remove the
+`Grep|Glob|Bash` block from `~/.claude/settings.json`.
 
 ---
 

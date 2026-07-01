@@ -30,9 +30,9 @@ EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
 CODE_EMBED_MODEL = os.environ.get("OLLAMA_CODE_EMBED_MODEL", "nomic-embed-text:latest")
 EMBED_BATCH = int(os.environ.get("OLLAMA_EMBED_BATCH", "64"))
 INDEX_FILENAME = ".ollama-mcp-index.sqlite"
-# Canonical location: every project has a .vscode/ — keep the index there so it
+# Canonical location: every project has a .git/ — keep the index there so it
 # stays out of source trees and is trivially gitignored once.
-INDEX_SUBDIR = ".vscode"
+INDEX_SUBDIR = ".git"
 
 MAX_INPUT_CHARS = 200_000
 
@@ -442,7 +442,7 @@ _DEFAULT_GLOBS = (
 _SKIP_DIRS = {
     "node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build",
     ".next", ".nuxt", ".turbo", ".cache", "coverage", ".pytest_cache",
-    "target", ".gradle", ".idea", ".vscode", "out", ".parcel-cache",
+    "target", ".gradle", ".idea", ".git", "out", ".parcel-cache",
     ".terraform", "vendor", "bower_components", ".mypy_cache", ".ruff_cache",
 }
 
@@ -540,19 +540,20 @@ def _unpack_vec(b: bytes) -> list[float]:
 
 
 def _index_path(root_p: Path) -> Path:
-    """Canonical index location: <root>/.vscode/.ollama-mcp-index.sqlite."""
+    """Canonical index location: <root>/.git/.ollama-mcp-index.sqlite."""
     return root_p / INDEX_SUBDIR / INDEX_FILENAME
 
 
 def _resolve_index(root_p: Path) -> Path:
-    """Prefer the .vscode/ index; fall back to a legacy root-level index if it
-    is the only one present (so old indexes keep working until rebuilt)."""
+    """Prefer the .git/ index; fall back to a legacy location (old .vscode/ or
+    root-level index) if that is the only one present, so old indexes keep
+    working until rebuilt."""
     new = _index_path(root_p)
     if new.exists():
         return new
-    legacy = root_p / INDEX_FILENAME
-    if legacy.exists():
-        return legacy
+    for legacy in (root_p / ".vscode" / INDEX_FILENAME, root_p / INDEX_FILENAME):
+        if legacy.exists():
+            return legacy
     return new
 
 
@@ -701,7 +702,7 @@ def index_project(
     """Index a project for semantic code search. Walks `root` (default cwd),
     chunks each file into sliding windows of `window` lines (overlap=12),
     embeds each chunk with bge-m3 (multilingual, good for code+PT-BR comments),
-    and stores everything in `.vscode/.ollama-mcp-index.sqlite` at the project
+    and stores everything in `.git/.ollama-mcp-index.sqlite` at the project
     root (kept out of the source tree; gitignore it once).
 
     Incremental by commit: when `root` is a git repo's top level and an index
@@ -717,7 +718,7 @@ def index_project(
     db_path = _index_path(root_p)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     legacy = root_p / INDEX_FILENAME
-    if legacy.exists() and not rebuild:  # migrate old root-level index into .vscode/
+    if legacy.exists() and not rebuild:  # migrate old root-level index into .git/
         if not db_path.exists():
             legacy.replace(db_path)
         else:
@@ -825,7 +826,7 @@ def ollama_index_project(
     rebuild: bool = False,
 ) -> str:
     """Index a project for semantic code search. Stores the index in
-    `.vscode/.ollama-mcp-index.sqlite` and refreshes incrementally by commit
+    `.git/.ollama-mcp-index.sqlite` and refreshes incrementally by commit
     (only git-changed files since the last indexed sha). Respects .gitignore.
     Usually you don't call this directly — the `ollama-mcp-index` CLI keeps it
     fresh from a terminal. See `index_project` for the full contract."""
@@ -903,7 +904,7 @@ def ollama_code_search(
     model: str | None = None,
     auto_index: bool = True,
 ) -> str:
-    """Semantic search over the project's index (`.vscode/.ollama-mcp-index.sqlite`).
+    """Semantic search over the project's index (`.git/.ollama-mcp-index.sqlite`).
     Returns top-`k` chunks as `path:start-end` + snippet. Use BEFORE Read/Grep
     when looking for a concept ("where do we handle PDI recalculation?") instead
     of a literal string. `path_glob` filters (e.g. "frontend/src/**/*.tsx").

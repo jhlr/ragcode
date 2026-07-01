@@ -2,7 +2,7 @@
 """CLI front-end for the ollama-mcp semantic index.
 
 Lets you (re)build the project index from a terminal, independent of any
-Claude session. The index lives in `<root>/.vscode/.ollama-mcp-index.sqlite`,
+Claude session. The index lives in `<root>/.git/.ollama-mcp-index.sqlite`,
 refreshes incrementally by commit, and respects .gitignore.
 
 Usage:
@@ -38,7 +38,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         prog="ollama-mcp-index",
         description="Build/refresh the ollama-mcp semantic code index "
-                    "(.vscode/.ollama-mcp-index.sqlite, commit-incremental, "
+                    "(.git/.ollama-mcp-index.sqlite, commit-incremental, "
                     "honors .gitignore).",
     )
     ap.add_argument("root", nargs="?", default=".", help="project root (default: cwd)")
