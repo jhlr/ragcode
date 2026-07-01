@@ -502,7 +502,15 @@ def _chunk_lines(text: str, window: int, overlap: int) -> list[tuple[int, int, s
 
 def _open_index(db_path: Path):
     import sqlite3
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30.0)
+    # WAL + a busy timeout so a reindex and a concurrent search/read don't
+    # collide with an instant "database is locked": WAL lets readers run while a
+    # writer holds the lock, and busy_timeout makes a writer wait its turn
+    # instead of failing. WAL is persisted in the DB header, so every connection
+    # (incl. the long-lived MCP server) benefits once set.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS files (
             path TEXT PRIMARY KEY,
