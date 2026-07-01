@@ -176,7 +176,9 @@ is to search first.
   - **Bash `grep`/`rg`** → blocked when no recent `code_search`, else pass.
     **Bash `find`** and the **`Glob`** tool (find-by-name) → **always blocked**.
   - **Escape hatch:** append `# allow-grep: <reason>` to any Bash command (a
-    bare `# allow-grep` with no reason is rejected).
+    bare `# allow-grep` with no reason is rejected). Every bypass is appended to
+    `~/.claude/state/ragcode-bypass.log` (time, cwd, reason, command) so you can
+    audit whether the agent is leaning on it.
 - **`PostToolUse` on `ollama_code_search`** (`ragcode-mark-search.py`): stamps
   the per-project time of the last semantic search, which is what the recency
   checks above read.

@@ -12,7 +12,8 @@ first:
     identifier / regex patterns -> BLOCK when no recent code_search, else pass.
   - Bash grep/rg -> BLOCK when no recent code_search, else pass. Bash find and
     the Glob tool (find-by-name) -> BLOCK. Bypass any Bash command with a
-    trailing `# allow-grep: <reason>` (a bare `# allow-grep` is rejected).
+    trailing `# allow-grep: <reason>` (a bare `# allow-grep` is rejected); every
+    bypass is logged to ~/.claude/state/ragcode-bypass.log for audit.
 
 Recency is stamped per project by ragcode-mark-search.py (a PostToolUse hook on
 ollama_code_search). Fails open on any error so a bug never wedges the session;
@@ -80,6 +81,19 @@ def is_conceptual(pattern: str) -> bool:
 def _marker(cwd: str) -> pathlib.Path:
     h = hashlib.md5((cwd or "").encode()).hexdigest()[:16]
     return STATE_DIR / f"ragcode-lastsearch-{h}"
+
+
+def _log_bypass(cwd: str, reason: str, cmd: str) -> None:
+    """Append every `# allow-grep: <reason>` bypass to an audit log so overuse is
+    visible. Best-effort; never blocks."""
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
+        line = "\t".join([ts, cwd or "-", reason, " ".join(cmd.split())])
+        with open(STATE_DIR / "ragcode-bypass.log", "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
 
 
 def fresh(cwd: str) -> bool:
@@ -176,8 +190,10 @@ def main() -> int:
 
     if tool == "Bash":
         cmd = ti.get("command", "") or ""
-        if re.search(r"#\s*allow-grep:\s*\S", cmd):
-            return 0  # deliberate, reasoned bypass
+        m = re.search(r"#\s*allow-grep:\s*(\S.*)", cmd)
+        if m:  # deliberate, reasoned bypass — logged for audit
+            _log_bypass(cwd, m.group(1).strip(), cmd)
+            return 0
         if "# allow-grep" in cmd or "#allow-grep" in cmd:
             deny(
                 "Bypass precisa de motivo: use `# allow-grep: <razao>` "
