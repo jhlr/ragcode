@@ -152,27 +152,32 @@ write to your **global** `~/.claude/settings.json`:
 They install two scripts into `~/.claude/hooks/` and merge two blocks into
 `~/.claude/settings.json`:
 
+A **recent `code_search`** (per project, within `RAGCODE_GATE_STALE`, default
+**120 s**) is the key that unlocks raw file access — without one, the cheap path
+is to search first.
+
 - **`PreToolUse` on `Grep|Glob|Bash|Read`** (`ragcode-search-gate.py`):
-  - **`Grep` conceptual pattern** — a natural-language word/phrase (`onde
-    recalcula o PDI`, `authentication`) → **blocked**, use
-    `mcp__ragcode__ollama_code_search`. Code-shaped tokens and regex
-    (`validateToken`, `user_id`, `def .*embed`) pass.
-  - **`Read` of a large text/log/data file** (whole-file, no range, > ~80 KB) →
-    **blocked**, use `ollama_summarize`/`ollama_grep_explain` or Read an
-    `offset`/`limit` range. Small reads and media/binary pass.
-  - **Bash `find`** → **blocked**. **Bash `grep`/`rg`** and exact `Grep` → pass,
-    but with a **reminder** to search semantically first when no `code_search`
-    ran recently in this project.
+  - **`Read` (any non-media file)** → **blocked** unless a `code_search` ran
+    recently. Even when fresh, a large whole-file read (no range, > ~80 KB) is
+    blocked toward `ollama_summarize`/`ollama_grep_explain` or an `offset`/`limit`
+    range. Gating small reads too closes the "read files one by one" backfire.
+    Media/binary always pass.
+  - **`Grep` conceptual pattern** (`onde recalcula o PDI`, `authentication`) →
+    **always blocked**. Exact / identifier / regex (`validateToken`, `user_id`,
+    `def .*embed`) → blocked when no recent `code_search`, else pass.
+  - **Bash `grep`/`rg`** → blocked when no recent `code_search`, else pass.
+    **Bash `find`** and the **`Glob`** tool (find-by-name) → **always blocked**.
   - **Escape hatch:** append `# allow-grep: <reason>` to any Bash command (a
     bare `# allow-grep` with no reason is rejected).
 - **`PostToolUse` on `ollama_code_search`** (`ragcode-mark-search.py`): stamps
-  the per-project time of the last semantic search, so the reminders above only
-  fire when a search is **stale** (default 10 min; `RAGCODE_GATE_STALE`).
+  the per-project time of the last semantic search, which is what the recency
+  checks above read.
 
-Design note — it deliberately hard-blocks only where a strictly cheaper path
-exists (concept → `code_search`, huge file → `summarize`) and merely *reminds*
-on exact grep, so it never pushes the agent into reading files one by one.
-Tunables: `RAGCODE_GATE_STALE` (s), `RAGCODE_GATE_READ_BYTES`.
+Design note — gating *all* file access on a recent semantic search funnels every
+lookup through `code_search` (concept → search, then grep/read to refine), which
+is what closes the per-file-read backfire. Safety valve: set `RAGCODE_GATE_OFF=1`
+to disable the gate entirely (e.g. if the ragcode server is down). Tunables:
+`RAGCODE_GATE_STALE` (s), `RAGCODE_GATE_READ_BYTES`, `RAGCODE_GATE_OFF`.
 
 The merge is idempotent and never clobbers existing settings or other hooks. To
 review or disable them later, use `/hooks` in Claude Code, or remove the
