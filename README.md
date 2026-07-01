@@ -138,31 +138,45 @@ claude mcp add ragcode --scope user -- \
 
 ---
 
-## Search-gate hook (optional)
+## Search-gate hooks (optional)
 
-An opt-in Claude Code `PreToolUse` hook that steers code search toward the
-semantic index instead of raw text search. It's separate from `install.sh`
-because it writes to your **global** `~/.claude/settings.json`:
+Opt-in Claude Code hooks that **funnel** code work toward the semantic index
+instead of raw text search / bulk reads. Separate from `install.sh` because they
+write to your **global** `~/.claude/settings.json`:
 
 ```bash
 ./install-hook.sh              # install / update (idempotent)
-./install-hook.sh --uninstall  # remove the hook + script
+./install-hook.sh --uninstall  # remove the hooks + scripts
 ```
 
-It installs `hooks/ragcode-search-gate.py` into `~/.claude/hooks/` and merges a
-`Grep|Glob|Bash` block into `~/.claude/settings.json`. Behavior:
+They install two scripts into `~/.claude/hooks/` and merge two blocks into
+`~/.claude/settings.json`:
 
-- **`Grep` tool + conceptual pattern** (natural-language phrase, e.g. `onde
-  recalcula o PDI`) → **blocked**, with a message to use
-  `mcp__ragcode__ollama_code_search`. Exact identifiers, quoted strings and
-  regex (`validateToken`, `def .*embed`, `class Foo`) pass through.
-- **Bash `grep`/`rg`/`find` and the `Glob` tool** → non-blocking reminder only.
-- **Escape hatch:** append `# allow-grep` to any Bash command to silence the
-  reminder / bypass the gate for a genuine exact search.
+- **`PreToolUse` on `Grep|Glob|Bash|Read`** (`ragcode-search-gate.py`):
+  - **`Grep` conceptual pattern** — a natural-language word/phrase (`onde
+    recalcula o PDI`, `authentication`) → **blocked**, use
+    `mcp__ragcode__ollama_code_search`. Code-shaped tokens and regex
+    (`validateToken`, `user_id`, `def .*embed`) pass.
+  - **`Read` of a large text/log/data file** (whole-file, no range, > ~80 KB) →
+    **blocked**, use `ollama_summarize`/`ollama_grep_explain` or Read an
+    `offset`/`limit` range. Small reads and media/binary pass.
+  - **Bash `find`** → **blocked**. **Bash `grep`/`rg`** and exact `Grep` → pass,
+    but with a **reminder** to search semantically first when no `code_search`
+    ran recently in this project.
+  - **Escape hatch:** append `# allow-grep: <reason>` to any Bash command (a
+    bare `# allow-grep` with no reason is rejected).
+- **`PostToolUse` on `ollama_code_search`** (`ragcode-mark-search.py`): stamps
+  the per-project time of the last semantic search, so the reminders above only
+  fire when a search is **stale** (default 10 min; `RAGCODE_GATE_STALE`).
+
+Design note — it deliberately hard-blocks only where a strictly cheaper path
+exists (concept → `code_search`, huge file → `summarize`) and merely *reminds*
+on exact grep, so it never pushes the agent into reading files one by one.
+Tunables: `RAGCODE_GATE_STALE` (s), `RAGCODE_GATE_READ_BYTES`.
 
 The merge is idempotent and never clobbers existing settings or other hooks. To
-review or disable it later, use `/hooks` in Claude Code, or remove the
-`Grep|Glob|Bash` block from `~/.claude/settings.json`.
+review or disable them later, use `/hooks` in Claude Code, or remove the
+`ragcode-*` blocks from `~/.claude/settings.json`.
 
 ---
 
